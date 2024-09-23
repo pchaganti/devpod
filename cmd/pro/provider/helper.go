@@ -17,6 +17,7 @@ import (
 	"github.com/loft-sh/devpod/pkg/loft"
 	"github.com/loft-sh/devpod/pkg/loft/client"
 	"github.com/loft-sh/devpod/pkg/loft/project"
+	"github.com/loft-sh/log"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -101,17 +102,24 @@ func OptionsFromEnv(name string) url.Values {
 	return nil
 }
 
-func DialWorkspace(baseClient client.Client, workspace *managementv1.DevPodWorkspaceInstance, subResource string, values url.Values) (*websocket.Conn, error) {
+func DialWorkspace(baseClient client.Client, workspace *managementv1.DevPodWorkspaceInstance, subResource string, values url.Values, log log.Logger) (*websocket.Conn, error) {
 	restConfig, err := baseClient.ManagementConfig()
 	if err != nil {
 		return nil, err
 	}
 
 	host := restConfig.Host
+
+	// check if this workspace has been scheduled to run on a specific runner
+	if workspace.Annotations != nil && workspace.Annotations[storagev1.DevPodWorkspaceRunnerEndpointAnnotation] != "" {
+		host = workspace.Annotations[storagev1.DevPodWorkspaceRunnerEndpointAnnotation]
+	}
+
 	parsedURL, _ := url.Parse(host)
 	if parsedURL != nil && parsedURL.Host != "" {
 		host = parsedURL.Host
 	}
+	log.Debugf("Connect to workspace using host: %s", host)
 
 	loftURL := "wss://" + host + "/kubernetes/management/apis/management.loft.sh/v1/namespaces/" + workspace.Namespace + "/devpodworkspaceinstances/" + workspace.Name + "/" + subResource
 	if len(values) > 0 {
@@ -131,7 +139,7 @@ func DialWorkspace(baseClient client.Client, workspace *managementv1.DevPodWorks
 		if response != nil {
 			out, _ := io.ReadAll(response.Body)
 			headers, _ := json.Marshal(response.Header)
-			return nil, fmt.Errorf("error dialing websocket %s (code %d): headers - %s, response - %s, error - %w", loftURL, response.StatusCode, string(headers), string(out), err)
+			return nil, fmt.Errorf("%s: error dialing websocket %s (code %d): headers - %s, error - %w", string(out), loftURL, response.StatusCode, string(headers), err)
 		}
 
 		return nil, fmt.Errorf("error dialing websocket %s: %w", loftURL, err)

@@ -78,7 +78,7 @@ func NewSetupContainerCmd(flags *flags.GlobalFlags) *cobra.Command {
 // Run runs the command logic
 func (cmd *SetupContainerCmd) Run(ctx context.Context) error {
 	// create a grpc client
-	tunnelClient, err := tunnelserver.NewTunnelClient(os.Stdin, os.Stdout, true)
+	tunnelClient, err := tunnelserver.NewTunnelClient(os.Stdin, os.Stdout, true, 0)
 	if err != nil {
 		return fmt.Errorf("error creating tunnel client: %w", err)
 	}
@@ -159,8 +159,22 @@ func (cmd *SetupContainerCmd) Run(ctx context.Context) error {
 		}
 	}
 
+	if b, err := workspaceInfo.PullFromInsideContainer.Bool(); err == nil && b {
+		if err := agent.CloneRepositoryForWorkspace(ctx,
+			&workspaceInfo.Source,
+			&workspaceInfo.Agent,
+			workspaceInfo.ContentFolder,
+			"",
+			workspaceInfo.CLIOptions,
+			true,
+			logger,
+		); err != nil {
+			return err
+		}
+	}
+
 	// setup container
-	err = setup.SetupContainer(setupInfo, workspaceInfo.CLIOptions.WorkspaceEnv, cmd.ChownWorkspace, logger)
+	err = setup.SetupContainer(ctx, setupInfo, workspaceInfo.CLIOptions.WorkspaceEnv, cmd.ChownWorkspace, logger)
 	if err != nil {
 		return err
 	}
@@ -205,6 +219,7 @@ func fillContainerEnv(setupInfo *config.Result) error {
 	if setupInfo.MergedConfig.RemoteEnv == nil {
 		setupInfo.MergedConfig.RemoteEnv = make(map[string]string)
 	}
+
 	if _, ok := setupInfo.MergedConfig.RemoteEnv["PATH"]; !ok {
 		setupInfo.MergedConfig.RemoteEnv["PATH"] = "${containerEnv:PATH}"
 	}
@@ -287,6 +302,10 @@ func dockerlessBuild(
 	args = append(args, parseIgnorePaths(dockerlessOptions.IgnorePaths)...)
 	args = append(args, "--build-arg", "TARGETOS="+runtime.GOOS)
 	args = append(args, "--build-arg", "TARGETARCH="+runtime.GOARCH)
+	if dockerlessOptions.RegistryCache != "" {
+		log.Debug("Appending registry cache to dockerless build arguments ", dockerlessOptions.RegistryCache)
+		args = append(args, "--registry-cache", dockerlessOptions.RegistryCache)
+	}
 
 	// ignore mounts
 	args = append(args, "--ignore-path", setupInfo.SubstitutionContext.ContainerWorkspaceFolder)
@@ -378,9 +397,9 @@ func (cmd *SetupContainerCmd) installIDE(setupInfo *config.Result, ide *provider
 	case string(config2.IDENone):
 		return nil
 	case string(config2.IDEVSCode):
-		return cmd.setupVSCode(setupInfo, ide.Options, vscode.ReleaseChannelStable, log)
+		return cmd.setupVSCode(setupInfo, ide.Options, vscode.FlavorStable, log)
 	case string(config2.IDEVSCodeInsiders):
-		return cmd.setupVSCode(setupInfo, ide.Options, vscode.ReleaseChannelInsiders, log)
+		return cmd.setupVSCode(setupInfo, ide.Options, vscode.FlavorInsiders, log)
 	case string(config2.IDEOpenVSCode):
 		return cmd.setupOpenVSCode(setupInfo, ide.Options, log)
 	case string(config2.IDEGoland):
@@ -410,7 +429,7 @@ func (cmd *SetupContainerCmd) installIDE(setupInfo *config.Result, ide *provider
 	return nil
 }
 
-func (cmd *SetupContainerCmd) setupVSCode(setupInfo *config.Result, ideOptions map[string]config2.OptionValue, releaseChannel vscode.ReleaseChannel, log log.Logger) error {
+func (cmd *SetupContainerCmd) setupVSCode(setupInfo *config.Result, ideOptions map[string]config2.OptionValue, flavor vscode.Flavor, log log.Logger) error {
 	log.Debugf("Setup vscode...")
 	vsCodeConfiguration := config.GetVSCodeConfiguration(setupInfo.MergedConfig)
 	settings := ""
@@ -424,7 +443,7 @@ func (cmd *SetupContainerCmd) setupVSCode(setupInfo *config.Result, ideOptions m
 	}
 
 	user := config.GetRemoteUser(setupInfo)
-	err := vscode.NewVSCodeServer(vsCodeConfiguration.Extensions, settings, user, ideOptions, releaseChannel, log).Install()
+	err := vscode.NewVSCodeServer(vsCodeConfiguration.Extensions, settings, user, ideOptions, flavor, log).Install()
 	if err != nil {
 		return err
 	}
@@ -448,17 +467,17 @@ func (cmd *SetupContainerCmd) setupVSCode(setupInfo *config.Result, ideOptions m
 		args := []string{
 			"agent", "container", "vscode-async",
 			"--setup-info", cmd.SetupInfo,
-			"--release-channel", string(releaseChannel),
+			"--release-channel", string(flavor),
 		}
 
 		return exec.Command(binaryPath, args...), nil
 	})
 }
 
-func setupVSCodeExtensions(setupInfo *config.Result, releaseChannel vscode.ReleaseChannel, log log.Logger) error {
+func setupVSCodeExtensions(setupInfo *config.Result, flavor vscode.Flavor, log log.Logger) error {
 	vsCodeConfiguration := config.GetVSCodeConfiguration(setupInfo.MergedConfig)
 	user := config.GetRemoteUser(setupInfo)
-	return vscode.NewVSCodeServer(vsCodeConfiguration.Extensions, "", user, nil, releaseChannel, log).InstallExtensions()
+	return vscode.NewVSCodeServer(vsCodeConfiguration.Extensions, "", user, nil, flavor, log).InstallExtensions()
 }
 
 func setupOpenVSCodeExtensions(setupInfo *config.Result, log log.Logger) error {

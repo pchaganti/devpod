@@ -11,6 +11,8 @@ import {
   HStack,
   Icon,
   IconButton,
+  List,
+  ListItem,
   Menu,
   MenuButton,
   MenuItem,
@@ -36,6 +38,7 @@ import { useQuery } from "@tanstack/react-query"
 import dayjs from "dayjs"
 import { useCallback, useId, useMemo, useRef, useState } from "react"
 import { HiClock, HiOutlineCode, HiShare } from "react-icons/hi"
+import { HiServerStack } from "react-icons/hi2"
 import { useNavigate } from "react-router"
 import { client } from "../../client"
 import { IconTag, IDEIcon } from "../../components"
@@ -56,16 +59,19 @@ import {
   Pause,
   Play,
   Stack3D,
+  Template,
   Trash,
 } from "../../icons"
 import { getIDEDisplayName, useHover } from "../../lib"
 import { QueryKeys } from "../../queryKeys"
 import { Routes } from "../../routes"
-import { TIDE, TIDEs, TProInstance, TWorkspace, TWorkspaceID } from "../../types"
+import { TIDE, TIDEs, TProInstance, TProvider, TWorkspace, TWorkspaceID } from "../../types"
 import { useIDEs } from "../../useIDEs"
 import { ConfigureProviderOptionsForm } from "../Providers"
 import { getIDEName, getSourceName } from "./helpers"
 import { WorkspaceStatusBadge } from "./WorkspaceStatusBadge"
+import { processDisplayOptions } from "../Providers/AddProvider/useProviderOptions"
+import { mergeOptionDefinitions, TOptionWithID } from "../Providers/helpers"
 
 type TWorkspaceCardProps = Readonly<{
   workspaceID: TWorkspaceID
@@ -98,6 +104,7 @@ export function WorkspaceCard({ workspaceID, isSelected, onSelectionChange }: TW
   } = useDisclosure()
 
   const workspace = useWorkspace(workspaceID)
+  const [provider] = useProvider(workspace.data?.provider?.name)
   const [ideName, setIdeName] = useState<string | undefined>(() => {
     if (settings.fixedIDE && defaultIDE?.name) {
       return defaultIDE.name
@@ -163,6 +170,7 @@ export function WorkspaceCard({ workspaceID, isSelected, onSelectionChange }: TW
         marginBottom="3">
         <WorkspaceCardHeader
           workspace={workspace.data}
+          provider={provider}
           isLoading={isLoading}
           currentAction={workspace.current}
           ideName={ideName}
@@ -176,6 +184,7 @@ export function WorkspaceCard({ workspaceID, isSelected, onSelectionChange }: TW
           <WorkspaceControls
             id={workspace.data.id}
             workspace={workspace}
+            provider={provider}
             isLoading={isLoading}
             isIDEFixed={settings.fixedIDE}
             ides={ides}
@@ -340,6 +349,7 @@ export function WorkspaceCard({ workspaceID, isSelected, onSelectionChange }: TW
 
 type TWorkspaceCardHeaderProps = Readonly<{
   workspace: TWorkspace
+  provider: TProvider | undefined
   isLoading: boolean
   currentAction: TActionObj | undefined
   ideName: string | undefined
@@ -351,6 +361,7 @@ type TWorkspaceCardHeaderProps = Readonly<{
 }>
 function WorkspaceCardHeader({
   workspace,
+  provider,
   isLoading,
   currentAction,
   ideName,
@@ -362,7 +373,7 @@ function WorkspaceCardHeader({
 }: TWorkspaceCardHeaderProps) {
   const navigate = useNavigate()
   const checkboxID = useId()
-  const { id, status, provider, ide, lastUsed, source } = workspace
+  const { id, status, provider: providerState, ide, lastUsed, source } = workspace
   const workspaceActions = useWorkspaceActions(id)
 
   const idesQuery = useQuery({
@@ -399,6 +410,10 @@ function WorkspaceCardHeader({
     ideName !== undefined
       ? getIDEName({ name: ideName }, idesQuery.data)
       : getIDEName(ide, idesQuery.data)
+
+  const maybeRunnerName = getRunnerName(workspace, provider)
+  const maybeTemplate = getTemplate(workspace, provider)
+  const maybeTemplateOptions = getTemplateOptions(workspace, provider)
 
   return (
     <CardHeader overflow="hidden" w="full">
@@ -455,25 +470,60 @@ function WorkspaceCardHeader({
       <HStack rowGap={2} marginTop={4} flexWrap="wrap" alignItems="center" paddingLeft="8">
         <IconTag
           icon={<Stack3D />}
-          label={provider?.name ?? "No provider"}
-          infoText={provider?.name ? `Uses provider ${provider.name}` : undefined}
+          label={providerState?.name ?? "No provider"}
+          info={providerState?.name ? `Uses provider ${providerState.name}` : undefined}
           onClick={() => {
-            if (!provider?.name) {
+            if (!providerState?.name) {
               return
             }
 
-            navigate(Routes.toProvider(provider.name))
+            navigate(Routes.toProvider(providerState.name))
           }}
         />
         <IconTag
           icon={<Icon as={HiOutlineCode} />}
           label={ideDisplayName}
-          infoText={`Will be opened in ${ideDisplayName}`}
+          info={`Will be opened in ${ideDisplayName}`}
         />
+        {maybeTemplate && (
+          <IconTag
+            icon={<Template />}
+            label={maybeTemplate}
+            info={
+              <Box width="full">
+                Using {maybeTemplate} template with options: <br />
+                {maybeTemplateOptions.length > 0 ? (
+                  <List mt="2" width="full">
+                    {maybeTemplateOptions.map((opt) => (
+                      <ListItem
+                        key={opt.id}
+                        width="full"
+                        display="flex"
+                        flexFlow="row nowrap"
+                        alignItems="space-between">
+                        <Text fontWeight="bold">{opt.value}</Text>
+                        <Text ml="4">({opt.displayName || opt.id})</Text>
+                      </ListItem>
+                    ))}
+                  </List>
+                ) : (
+                  "No options configured"
+                )}
+              </Box>
+            }
+          />
+        )}
+        {maybeRunnerName && (
+          <IconTag
+            icon={<Icon as={HiServerStack} />}
+            label={maybeRunnerName}
+            info={`Running on ${maybeRunnerName}`}
+          />
+        )}
         <IconTag
           icon={<Icon as={HiClock} />}
           label={dayjs(new Date(lastUsed)).fromNow()}
-          infoText={`Last used ${dayjs(new Date(lastUsed)).fromNow()}`}
+          info={`Last used ${dayjs(new Date(lastUsed)).fromNow()}`}
         />
       </HStack>
     </CardHeader>
@@ -483,6 +533,7 @@ function WorkspaceCardHeader({
 type TWorkspaceControlsProps = Readonly<{
   id: TWorkspaceID
   workspace: TWorkspaceResult
+  provider: TProvider | undefined
   isIDEFixed: boolean
   isLoading: boolean
   ides: TIDEs | undefined
@@ -503,6 +554,7 @@ function WorkspaceControls({
   ides,
   ideName,
   isIDEFixed,
+  provider,
   setIdeName,
   navigateToAction,
   onRebuildClicked,
@@ -512,7 +564,6 @@ function WorkspaceControls({
   onLogsClicked,
   onChangeOptionsClicked,
 }: TWorkspaceControlsProps) {
-  const [provider] = useProvider(workspace.data?.provider?.name)
   const [[proInstances]] = useProInstances()
   const proInstance = useMemo<TProInstance | undefined>(() => {
     if (!provider?.isProxyProvider) {
@@ -711,4 +762,48 @@ function useShareWorkspace(
     isEnabled: workspace !== undefined && proInstance !== undefined,
     onClick: handleShareClicked,
   }
+}
+
+function getRunnerName(workspace: TWorkspace, provider: TProvider | undefined): string | undefined {
+  const options = mergeOptionDefinitions(
+    workspace.provider?.options ?? {},
+    provider?.config?.options ?? {}
+  )
+  const maybeRunnerOption = options["LOFT_RUNNER"]
+  if (!maybeRunnerOption) {
+    return undefined
+  }
+  const value = maybeRunnerOption.value
+
+  return maybeRunnerOption.enum?.find((e) => e.value === value)?.displayName ?? value ?? undefined
+}
+
+function getTemplate(workspace: TWorkspace, provider: TProvider | undefined): string | undefined {
+  const options = mergeOptionDefinitions(
+    workspace.provider?.options ?? {},
+    provider?.config?.options ?? {}
+  )
+  const maybeTemplateOption = options["LOFT_TEMPLATE"]
+  if (!maybeTemplateOption) {
+    return undefined
+  }
+  const value = maybeTemplateOption.value
+
+  return maybeTemplateOption.enum?.find((e) => e.value === value)?.displayName ?? value ?? undefined
+}
+
+function getTemplateOptions(
+  workspace: TWorkspace,
+  provider: TProvider | undefined
+): readonly TOptionWithID[] {
+  const options = mergeOptionDefinitions(
+    workspace.provider?.options ?? {},
+    provider?.config?.options ?? {}
+  )
+  const displayOptions = processDisplayOptions(options, [], true)
+
+  // shouldn't have groups here as we passed in empty array earlier
+  return [...displayOptions.required, ...displayOptions.other].filter(
+    (opt) => opt.id !== "LOFT_TEMPLATE"
+  )
 }

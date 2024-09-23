@@ -89,7 +89,7 @@ export type TProviderOption = Readonly<{
   // If required is true and the user doesn't supply a value, devpod will ask the user
   required: TMaybe<boolean>
   // Allowed values for this option.
-  enum: TMaybe<string[]>
+  enum: TMaybe<TOptionEnum[]>
   // Suggestions are suggestions to show in the DevPod UI for this option
   suggestions: TMaybe<string[]>
   // Hidden specifies if the option should be hidden
@@ -106,6 +106,10 @@ export type TProviderOption = Readonly<{
   type: TMaybe<"string" | "duration" | "number" | "boolean" | "multiline">
   // Mutable specifies if an option can be changed on the workspace or machine after creating it
   mutable: TMaybe<boolean>
+}>
+export type TOptionEnum = Readonly<{
+  value: TMaybe<string>
+  displayName: TMaybe<string>
 }>
 
 export type TAddProviderConfig = Readonly<{
@@ -169,8 +173,6 @@ export type TWorkspaceStartConfig = Readonly<{
   sourceConfig?: Readonly<{
     source: string
     type?: TWorkspaceSourceType
-    gitBranch: string | undefined
-    gitCommit: string | undefined
   }>
 }>
 export const SUPPORTED_IDES = [
@@ -204,7 +206,11 @@ export type TImportWorkspaceConfig = Readonly<{
 //#region Context
 export type TContextOptions = Record<TContextOptionName, TContextOption>
 // See pkg/config/context.go
-export type TContextOptionName = "AGENT_URL" | "TELEMETRY"
+export type TContextOptionName =
+  | "AGENT_URL"
+  | "TELEMETRY"
+  | "SSH_INJECT_DOCKER_CREDENTIALS"
+  | "SSH_INJECT_GIT_CREDENTIALS"
 export type TContextOption = Readonly<{
   name: TContextOptionName
   description: string | null | undefined

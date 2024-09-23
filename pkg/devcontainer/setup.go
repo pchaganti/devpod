@@ -9,11 +9,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/loft-sh/devpod/pkg/agent"
 	"github.com/loft-sh/devpod/pkg/agent/tunnelserver"
 	"github.com/loft-sh/devpod/pkg/compress"
 	"github.com/loft-sh/devpod/pkg/devcontainer/config"
+	"github.com/loft-sh/devpod/pkg/devcontainer/crane"
 	"github.com/loft-sh/devpod/pkg/devcontainer/sshtunnel"
 	"github.com/loft-sh/devpod/pkg/driver"
 	provider2 "github.com/loft-sh/devpod/pkg/provider"
@@ -28,11 +30,12 @@ func (r *runner) setupContainer(
 	containerDetails *config.ContainerDetails,
 	mergedConfig *config.MergedDevContainerConfig,
 	substitutionContext *config.SubstitutionContext,
+	timeout time.Duration,
 ) (*config.Result, error) {
 	// inject agent
 	err := agent.InjectAgent(ctx, func(ctx context.Context, command string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
 		return r.Driver.CommandDevContainer(ctx, r.ID, "root", command, stdin, stdout, stderr)
-	}, false, agent.ContainerDevPodHelperLocation, agent.DefaultAgentDownloadURL(), false, r.Log)
+	}, false, agent.ContainerDevPodHelperLocation, agent.DefaultAgentDownloadURL(), false, r.Log, timeout)
 	if err != nil {
 		return nil, errors.Wrap(err, "inject agent")
 	}
@@ -67,13 +70,20 @@ func (r *runner) setupContainer(
 		return nil, err
 	}
 
-	// compress container workspace info
-	workspaceConfigRaw, err := json.Marshal(&provider2.ContainerWorkspaceInfo{
+	workspaceConfig := &provider2.ContainerWorkspaceInfo{
 		IDE:              r.WorkspaceConfig.Workspace.IDE,
 		CLIOptions:       r.WorkspaceConfig.CLIOptions,
 		Dockerless:       r.WorkspaceConfig.Agent.Dockerless,
 		ContainerTimeout: r.WorkspaceConfig.Agent.ContainerTimeout,
-	})
+		Source:           r.WorkspaceConfig.Workspace.Source,
+		Agent:            r.WorkspaceConfig.Agent,
+		ContentFolder:    r.WorkspaceConfig.ContentFolder,
+	}
+	if crane.ShouldUse(&r.WorkspaceConfig.CLIOptions) {
+		workspaceConfig.PullFromInsideContainer = "true"
+	}
+	// compress container workspace info
+	workspaceConfigRaw, err := json.Marshal(workspaceConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -114,6 +124,7 @@ func (r *runner) setupContainer(
 	return sshtunnel.ExecuteCommand(
 		ctx,
 		nil,
+		false,
 		agentInjectFunc,
 		sshTunnelCmd,
 		setupCommand,

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/loft-sh/devpod/pkg/config"
 	config2 "github.com/loft-sh/devpod/pkg/devcontainer/config"
 	"github.com/loft-sh/devpod/pkg/devcontainer/setup"
+	"github.com/loft-sh/devpod/pkg/gitsshsigning"
 	"github.com/loft-sh/devpod/pkg/ide/openvscode"
 	"github.com/loft-sh/devpod/pkg/netstat"
 	devssh "github.com/loft-sh/devpod/pkg/ssh"
@@ -23,6 +25,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 )
 
 func RunInContainer(
@@ -31,8 +35,6 @@ func RunInContainer(
 	containerClient *ssh.Client,
 	user string,
 	forwardPorts bool,
-	gitCredentials,
-	dockerCredentials bool,
 	extraPorts []string,
 	gitUsername,
 	gitToken string,
@@ -50,37 +52,76 @@ func RunInContainer(
 		return errors.Wrap(err, "forward ports")
 	}
 
-	dockerCredentials = dockerCredentials && devPodConfig.ContextOption(config.ContextOptionSSHInjectDockerCredentials) == "true"
-	gitCredentials = gitCredentials && devPodConfig.ContextOption(config.ContextOptionSSHInjectGitCredentials) == "true"
+	configureDockerCredentials := devPodConfig.ContextOption(config.ContextOptionSSHInjectDockerCredentials) == "true"
+	configureGitCredentials := devPodConfig.ContextOption(config.ContextOptionSSHInjectGitCredentials) == "true"
+	configureGitSSHSignatureHelper := devPodConfig.ContextOption(config.ContextOptionGitSSHSignatureForwarding) == "true"
 
-	stdoutReader, stdoutWriter, err := os.Pipe()
-	if err != nil {
-		return err
-	}
-	defer stdoutWriter.Close()
+	return retry.OnError(wait.Backoff{
+		Steps:    math.MaxInt,
+		Duration: 500 * time.Millisecond,
+		Factor:   1,
+		Jitter:   0.1,
+	}, func(err error) bool {
+		// Always allow to retry. Potentially add exceptions in the future.
+		return true
+	}, func() error {
+		stdoutReader, stdoutWriter, err := os.Pipe()
+		if err != nil {
+			return err
+		}
+		defer stdoutWriter.Close()
 
-	stdinReader, stdinWriter, err := os.Pipe()
-	if err != nil {
-		return err
-	}
-	defer stdinWriter.Close()
+		stdinReader, stdinWriter, err := os.Pipe()
+		if err != nil {
+			return err
+		}
+		defer stdinWriter.Close()
 
-	// start server on stdio
-	cancelCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	// run credentials server
-	errChan := make(chan error, 1)
-	go func() {
+		// start server on stdio
+		cancelCtx, cancel := context.WithCancel(ctx)
 		defer cancel()
+
+		// create a port forwarder
+		var forwarder netstat.Forwarder
+		if forwardPorts {
+			forwarder = newForwarder(containerClient, append(forwardedPorts, fmt.Sprintf("%d", openvscode.DefaultVSCodePort)), log)
+		}
+
+		errChan := make(chan error, 1)
+		go func() {
+			defer cancel()
+			// forward credentials to container
+			err = tunnelserver.RunServicesServer(
+				cancelCtx,
+				stdoutReader,
+				stdinWriter,
+				configureGitCredentials,
+				configureDockerCredentials,
+				forwarder,
+				log,
+				tunnelserver.WithGitCredentialsOverride(gitUsername, gitToken),
+			)
+			if err != nil {
+				errChan <- errors.Wrap(err, "run tunnel server")
+			}
+			close(errChan)
+		}()
+
+		// run credentials server
 		writer := log.ErrorStreamOnly().Writer(logrus.DebugLevel, false)
 		defer writer.Close()
 
 		command := fmt.Sprintf("'%s' agent container credentials-server --user '%s'", agent.ContainerDevPodHelperLocation, user)
-		if gitCredentials {
+		if configureGitCredentials {
 			command += " --configure-git-helper"
 		}
-		if dockerCredentials {
+		if configureGitSSHSignatureHelper {
+			format, userSigningKey, err := gitsshsigning.ExtractGitConfiguration()
+			if err == nil && format == gitsshsigning.GPGFormatSSH && userSigningKey != "" {
+				command += fmt.Sprintf(" --git-user-signing-key %s", userSigningKey)
+			}
+		}
+		if configureDockerCredentials {
 			command += " --configure-docker-helper"
 		}
 		if forwardPorts {
@@ -90,32 +131,17 @@ func RunInContainer(
 			command += " --debug"
 		}
 
-		errChan <- devssh.Run(cancelCtx, containerClient, command, stdinReader, stdoutWriter, writer)
-	}()
+		err = devssh.Run(cancelCtx, containerClient, command, stdinReader, stdoutWriter, writer)
+		if err != nil {
+			return err
+		}
+		err = <-errChan
+		if err != nil {
+			return err
+		}
 
-	// create a port forwarder
-	var forwarder netstat.Forwarder
-	if forwardPorts {
-		forwarder = newForwarder(containerClient, append(forwardedPorts, fmt.Sprintf("%d", openvscode.DefaultVSCodePort)), log)
-	}
-
-	// forward credentials to container
-	err = tunnelserver.RunServicesServer(
-		cancelCtx,
-		stdoutReader,
-		stdinWriter,
-		gitCredentials,
-		dockerCredentials,
-		forwarder,
-		log,
-		tunnelserver.WithGitCredentialsOverride(gitUsername, gitToken),
-	)
-	if err != nil {
-		return errors.Wrap(err, "run tunnel server")
-	}
-
-	// wait until command finished
-	return <-errChan
+		return nil
+	})
 }
 
 func forwardDevContainerPorts(ctx context.Context, containerClient *ssh.Client, extraPorts []string, exitAfterTimeout time.Duration, log log.Logger) ([]string, error) {

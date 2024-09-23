@@ -175,7 +175,7 @@ export function ProviderCard({ id, provider, remove }: TProviderCardProps) {
                   ? providerWorkspaces.length + " workspaces"
                   : "No workspaces"
               }
-              infoText={`This provider is used by ${providerWorkspaces.length} ${
+              info={`This provider is used by ${providerWorkspaces.length} ${
                 providerWorkspaces.length === 1 ? "workspace" : "workspaces"
               }`}
             />
@@ -219,6 +219,7 @@ export function ProviderCard({ id, provider, remove }: TProviderCardProps) {
                     })
                   }
                   icon={<Icon as={HiDuplicate} boxSize="4" />}
+                  isDisabled={provider.isProxyProvider}
                 />
               </Tooltip>
             )}

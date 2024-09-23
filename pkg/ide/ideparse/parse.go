@@ -129,6 +129,13 @@ var AllowedIDEs = []AllowedIDE{
 		Icon:         "https://devpod.sh/assets/vscode_insiders.svg",
 		Experimental: true,
 	},
+	{
+		Name:         config.IDECursor,
+		DisplayName:  "Cursor",
+		Options:      vscode.Options,
+		Icon:         "https://devpod.sh/assets/cursor.svg",
+		Experimental: true,
+	},
 }
 
 func RefreshIDEOptions(devPodConfig *config.Config, workspace *provider.Workspace, ide string, options []string) (*provider.Workspace, error) {
@@ -245,7 +252,7 @@ func ParseOptions(options []string, ideOptions ide.Options) (map[string]config.O
 
 			if !matcher.MatchString(value) {
 				if ideOption.ValidationMessage != "" {
-					return nil, fmt.Errorf(ideOption.ValidationMessage)
+					return nil, fmt.Errorf("%s", ideOption.ValidationMessage)
 				}
 
 				return nil, fmt.Errorf("invalid value '%s' for option '%s', has to match the following regEx: %s", value, key, ideOption.ValidationPattern)

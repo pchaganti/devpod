@@ -35,14 +35,14 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&ClusterVirtualClusterDefaults{},
 		&ClusterAccess{},
 		&ClusterAccessList{},
-		&ClusterConnect{},
-		&ClusterConnectList{},
 		&ClusterRoleTemplate{},
 		&ClusterRoleTemplateList{},
 		&Config{},
 		&ConfigList{},
 		&ConvertVirtualClusterConfig{},
 		&ConvertVirtualClusterConfigList{},
+		&DevPodEnvironmentTemplate{},
+		&DevPodEnvironmentTemplateList{},
 		&DevPodWorkspaceInstance{},
 		&DevPodWorkspaceInstanceList{},
 		&DevPodDeleteOptions{},
@@ -70,6 +70,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&LicenseTokenList{},
 		&LoftUpgrade{},
 		&LoftUpgradeList{},
+		&OIDCClient{},
+		&OIDCClientList{},
 		&OwnedAccessKey{},
 		&OwnedAccessKeyList{},
 		&Project{},
@@ -78,15 +80,17 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&ProjectCharts{},
 		&ProjectClusters{},
 		&ProjectImportSpace{},
-		&ProjectImportVirtualCluster{},
 		&ProjectMembers{},
 		&ProjectMigrateSpaceInstance{},
 		&ProjectMigrateVirtualClusterInstance{},
+		&ProjectRunners{},
 		&ProjectTemplates{},
 		&ProjectSecret{},
 		&ProjectSecretList{},
 		&RedirectToken{},
 		&RedirectTokenList{},
+		&RegisterVirtualCluster{},
+		&RegisterVirtualClusterList{},
 		&ResetAccessKey{},
 		&ResetAccessKeyList{},
 		&Runner{},
@@ -99,8 +103,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&SelfSubjectAccessReviewList{},
 		&SharedSecret{},
 		&SharedSecretList{},
-		&SpaceConstraint{},
-		&SpaceConstraintList{},
 		&SpaceInstance{},
 		&SpaceInstanceList{},
 		&SpaceTemplate{},
@@ -114,6 +116,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&TeamList{},
 		&TeamAccessKeys{},
 		&TeamClusters{},
+		&TranslateVClusterResourceName{},
+		&TranslateVClusterResourceNameList{},
 		&User{},
 		&UserList{},
 		&UserAccessKeys{},
@@ -122,9 +126,9 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&UserProfile{},
 		&VirtualClusterInstance{},
 		&VirtualClusterInstanceList{},
+		&VirtualClusterAccessKey{},
 		&VirtualClusterInstanceKubeConfig{},
 		&VirtualClusterInstanceLog{},
-		&VirtualClusterInstanceWorkloadKubeConfig{},
 		&VirtualClusterTemplate{},
 		&VirtualClusterTemplateList{},
 	)
@@ -189,10 +193,10 @@ var (
 			nil,
 			management.NewClusterVirtualClusterDefaultsREST),
 		management.ManagementClusterAccessStorage,
-		management.ManagementClusterConnectStorage,
 		management.ManagementClusterRoleTemplateStorage,
 		management.ManagementConfigStorage,
 		management.ManagementConvertVirtualClusterConfigStorage,
+		management.ManagementDevPodEnvironmentTemplateStorage,
 		management.ManagementDevPodWorkspaceInstanceStorage,
 		builders.NewApiResourceWithStorage(
 			management.InternalDevPodDeleteOptionsREST,
@@ -243,6 +247,7 @@ var (
 			management.NewLicenseRequestREST),
 		management.ManagementLicenseTokenStorage,
 		management.ManagementLoftUpgradeStorage,
+		management.ManagementOIDCClientStorage,
 		management.ManagementOwnedAccessKeyStorage,
 		management.ManagementProjectStorage,
 		builders.NewApiResourceWithStorage(
@@ -271,11 +276,6 @@ var (
 			nil,
 			management.NewProjectImportSpaceREST),
 		builders.NewApiResourceWithStorage(
-			management.InternalProjectImportVirtualClusterREST,
-			func() runtime.Object { return &ProjectImportVirtualCluster{} }, // Register versioned resource
-			nil,
-			management.NewProjectImportVirtualClusterREST),
-		builders.NewApiResourceWithStorage(
 			management.InternalProjectMembersREST,
 			func() runtime.Object { return &ProjectMembers{} }, // Register versioned resource
 			nil,
@@ -291,12 +291,18 @@ var (
 			nil,
 			management.NewProjectMigrateVirtualClusterInstanceREST),
 		builders.NewApiResourceWithStorage(
+			management.InternalProjectRunnersREST,
+			func() runtime.Object { return &ProjectRunners{} }, // Register versioned resource
+			nil,
+			management.NewProjectRunnersREST),
+		builders.NewApiResourceWithStorage(
 			management.InternalProjectTemplatesREST,
 			func() runtime.Object { return &ProjectTemplates{} }, // Register versioned resource
 			nil,
 			management.NewProjectTemplatesREST),
 		management.ManagementProjectSecretStorage,
 		management.ManagementRedirectTokenStorage,
+		management.ManagementRegisterVirtualClusterStorage,
 		management.ManagementResetAccessKeyStorage,
 		management.ManagementRunnerStorage,
 		builders.NewApiResourceWithStorage(
@@ -317,7 +323,6 @@ var (
 		management.ManagementSelfStorage,
 		management.ManagementSelfSubjectAccessReviewStorage,
 		management.ManagementSharedSecretStorage,
-		management.ManagementSpaceConstraintStorage,
 		management.ManagementSpaceInstanceStorage,
 		management.ManagementSpaceTemplateStorage,
 		management.ManagementSubjectAccessReviewStorage,
@@ -338,6 +343,7 @@ var (
 			func() runtime.Object { return &TeamClusters{} }, // Register versioned resource
 			nil,
 			management.NewTeamClustersREST),
+		management.ManagementTranslateVClusterResourceNameStorage,
 		management.ManagementUserStorage,
 		builders.NewApiResourceWithStorage(
 			management.InternalUserAccessKeysREST,
@@ -361,6 +367,11 @@ var (
 			management.NewUserProfileREST),
 		management.ManagementVirtualClusterInstanceStorage,
 		builders.NewApiResourceWithStorage(
+			management.InternalVirtualClusterAccessKeyREST,
+			func() runtime.Object { return &VirtualClusterAccessKey{} }, // Register versioned resource
+			nil,
+			management.NewVirtualClusterAccessKeyREST),
+		builders.NewApiResourceWithStorage(
 			management.InternalVirtualClusterInstanceKubeConfigREST,
 			func() runtime.Object { return &VirtualClusterInstanceKubeConfig{} }, // Register versioned resource
 			nil,
@@ -370,11 +381,6 @@ var (
 			func() runtime.Object { return &VirtualClusterInstanceLog{} }, // Register versioned resource
 			nil,
 			management.NewVirtualClusterInstanceLogREST),
-		builders.NewApiResourceWithStorage(
-			management.InternalVirtualClusterInstanceWorkloadKubeConfigREST,
-			func() runtime.Object { return &VirtualClusterInstanceWorkloadKubeConfig{} }, // Register versioned resource
-			nil,
-			management.NewVirtualClusterInstanceWorkloadKubeConfigREST),
 		management.ManagementVirtualClusterTemplateStorage,
 	)
 
@@ -537,14 +543,6 @@ type ClusterAccessList struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-type ClusterConnectList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ClusterConnect `json:"items"`
-}
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 type ClusterRoleTemplateList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
@@ -565,6 +563,14 @@ type ConvertVirtualClusterConfigList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ConvertVirtualClusterConfig `json:"items"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type DevPodEnvironmentTemplateList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []DevPodEnvironmentTemplate `json:"items"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -705,6 +711,14 @@ type LoftUpgradeList struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
+type OIDCClientList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []OIDCClient `json:"items"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 type OwnedAccessKeyList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
@@ -753,14 +767,6 @@ type ProjectImportSpaceList struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-type ProjectImportVirtualClusterList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ProjectImportVirtualCluster `json:"items"`
-}
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 type ProjectMembersList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
@@ -785,6 +791,14 @@ type ProjectMigrateVirtualClusterInstanceList struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
+type ProjectRunnersList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []ProjectRunners `json:"items"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 type ProjectTemplatesList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
@@ -805,6 +819,14 @@ type RedirectTokenList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []RedirectToken `json:"items"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type RegisterVirtualClusterList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []RegisterVirtualCluster `json:"items"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -861,14 +883,6 @@ type SharedSecretList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []SharedSecret `json:"items"`
-}
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-type SpaceConstraintList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []SpaceConstraint `json:"items"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -937,6 +951,14 @@ type TeamClustersList struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
+type TranslateVClusterResourceNameList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []TranslateVClusterResourceName `json:"items"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 type UserList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
@@ -985,6 +1007,14 @@ type VirtualClusterInstanceList struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
+type VirtualClusterAccessKeyList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []VirtualClusterAccessKey `json:"items"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 type VirtualClusterInstanceKubeConfigList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
@@ -997,14 +1027,6 @@ type VirtualClusterInstanceLogList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []VirtualClusterInstanceLog `json:"items"`
-}
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-type VirtualClusterInstanceWorkloadKubeConfigList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []VirtualClusterInstanceWorkloadKubeConfig `json:"items"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

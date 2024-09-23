@@ -77,8 +77,6 @@ func NewBuildCmd(flags *flags.GlobalFlags) *cobra.Command {
 				cmd.DevContainerPath,
 				sshConfigPath,
 				nil,
-				cmd.GitBranch,
-				cmd.GitCommit,
 				cmd.UID,
 				false,
 				log.Default,
@@ -88,7 +86,7 @@ func NewBuildCmd(flags *flags.GlobalFlags) *cobra.Command {
 			}
 
 			// delete workspace if we have created it
-			if exists == "" {
+			if exists == "" && !cmd.SkipDelete {
 				defer func() {
 					err = baseWorkspaceClient.Delete(ctx, client.DeleteOptions{Force: true})
 					if err != nil {
@@ -115,8 +113,6 @@ func NewBuildCmd(flags *flags.GlobalFlags) *cobra.Command {
 	buildCmd.Flags().StringVar(&cmd.Repository, "repository", "", "The repository to push to")
 	buildCmd.Flags().StringSliceVar(&cmd.Platform, "platform", []string{}, "Set target platform for build")
 	buildCmd.Flags().BoolVar(&cmd.SkipPush, "skip-push", false, "If true will not push the image to the repository, useful for testing")
-	buildCmd.Flags().StringVar(&cmd.GitBranch, "git-branch", "", "The git branch to use")
-	buildCmd.Flags().StringVar(&cmd.GitCommit, "git-commit", "", "The git commit SHA to use")
 	buildCmd.Flags().Var(&cmd.GitCloneStrategy, "git-clone-strategy", "The git clone strategy DevPod uses to checkout git based workspaces. Can be full (default), blobless, treeless or shallow")
 
 	// TESTING
@@ -154,7 +150,7 @@ func (cmd *BuildCmd) build(ctx context.Context, workspaceClient client.Workspace
 
 func (cmd *BuildCmd) buildAgentClient(ctx context.Context, workspaceClient client.WorkspaceClient, log log.Logger) error {
 	// compress info
-	workspaceInfo, _, err := workspaceClient.AgentInfo(cmd.CLIOptions)
+	workspaceInfo, wInfo, err := workspaceClient.AgentInfo(cmd.CLIOptions)
 	if err != nil {
 		return err
 	}
@@ -191,14 +187,26 @@ func (cmd *BuildCmd) buildAgentClient(ctx context.Context, workspaceClient clien
 		writer := log.ErrorStreamOnly().Writer(logrus.InfoLevel, false)
 		defer writer.Close()
 
-		errChan <- agent.InjectAgentAndExecute(cancelCtx, func(ctx context.Context, command string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
-			return workspaceClient.Command(ctx, client.CommandOptions{
-				Command: command,
-				Stdin:   stdin,
-				Stdout:  stdout,
-				Stderr:  stderr,
-			})
-		}, workspaceClient.AgentLocal(), workspaceClient.AgentPath(), workspaceClient.AgentURL(), true, command, stdinReader, stdoutWriter, writer, log.ErrorStreamOnly())
+		errChan <- agent.InjectAgentAndExecute(
+			cancelCtx,
+			func(ctx context.Context, command string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+				return workspaceClient.Command(ctx, client.CommandOptions{
+					Command: command,
+					Stdin:   stdin,
+					Stdout:  stdout,
+					Stderr:  stderr,
+				})
+			},
+			workspaceClient.AgentLocal(),
+			workspaceClient.AgentPath(),
+			workspaceClient.AgentURL(),
+			true,
+			command,
+			stdinReader,
+			stdoutWriter,
+			writer,
+			log.ErrorStreamOnly(),
+			wInfo.InjectTimeout)
 	}()
 
 	// create container etc.

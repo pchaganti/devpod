@@ -9,8 +9,8 @@ import (
 // +genclient:nonNamespaced
 // +genclient:method=ListMembers,verb=get,subresource=members,result=github.com/loft-sh/api/v4/pkg/apis/management/v1.ProjectMembers
 // +genclient:method=ListTemplates,verb=get,subresource=templates,result=github.com/loft-sh/api/v4/pkg/apis/management/v1.ProjectTemplates
+// +genclient:method=ListRunners,verb=get,subresource=runners,result=github.com/loft-sh/api/v4/pkg/apis/management/v1.ProjectRunners
 // +genclient:method=ListClusters,verb=get,subresource=clusters,result=github.com/loft-sh/api/v4/pkg/apis/management/v1.ProjectClusters
-// +genclient:method=ImportVirtualCluster,verb=create,subresource=importvirtualcluster,input=github.com/loft-sh/api/v4/pkg/apis/management/v1.ProjectImportVirtualCluster,result=github.com/loft-sh/api/v4/pkg/apis/management/v1.ProjectImportVirtualCluster
 // +genclient:method=MigrateVirtualClusterInstance,verb=create,subresource=migratevirtualclusterinstance,input=github.com/loft-sh/api/v4/pkg/apis/management/v1.ProjectMigrateVirtualClusterInstance,result=github.com/loft-sh/api/v4/pkg/apis/management/v1.ProjectMigrateVirtualClusterInstance
 // +genclient:method=ImportSpace,verb=create,subresource=importspace,input=github.com/loft-sh/api/v4/pkg/apis/management/v1.ProjectImportSpace,result=github.com/loft-sh/api/v4/pkg/apis/management/v1.ProjectImportSpace
 // +genclient:method=MigrateSpaceInstance,verb=create,subresource=migratespaceinstance,input=github.com/loft-sh/api/v4/pkg/apis/management/v1.ProjectMigrateSpaceInstance,result=github.com/loft-sh/api/v4/pkg/apis/management/v1.ProjectMigrateSpaceInstance
@@ -21,10 +21,10 @@ import (
 // +resource:path=projects,rest=ProjectREST,statusRest=ProjectStatusREST
 // +subresource:request=ProjectCharts,path=charts,kind=ProjectCharts,rest=ProjectChartsREST
 // +subresource:request=ProjectTemplates,path=templates,kind=ProjectTemplates,rest=ProjectTemplatesREST
+// +subresource:request=ProjectRunners,path=runners,kind=ProjectRunners,rest=ProjectRunnersREST
 // +subresource:request=ProjectMembers,path=members,kind=ProjectMembers,rest=ProjectMembersREST
 // +subresource:request=ProjectClusters,path=clusters,kind=ProjectClusters,rest=ProjectClustersREST
 // +subresource:request=ProjectChartInfo,path=chartinfo,kind=ProjectChartInfo,rest=ProjectChartInfoREST
-// +subresource:request=ProjectImportVirtualCluster,path=importvirtualcluster,kind=ProjectImportVirtualCluster,rest=ProjectImportVirtualClusterREST
 // +subresource:request=ProjectMigrateVirtualClusterInstance,path=migratevirtualclusterinstance,kind=ProjectMigrateVirtualClusterInstance,rest=ProjectMigrateVirtualClusterInstanceREST
 // +subresource:request=ProjectImportSpace,path=importspace,kind=ProjectImportSpace,rest=ProjectImportSpaceREST
 // +subresource:request=ProjectMigrateSpaceInstance,path=migratespaceinstance,kind=ProjectMigrateSpaceInstance,rest=ProjectMigrateSpaceInstanceREST

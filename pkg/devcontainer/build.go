@@ -103,6 +103,7 @@ func (r *runner) build(
 			ImageMetadata: imageMetadata,
 			ImageName:     overrideBuildImageName,
 			PrebuildHash:  imageTag,
+			RegistryCache: options.RegistryCache,
 		}, nil
 	}
 
@@ -133,6 +134,7 @@ func (r *runner) extendImage(
 			ImageDetails:  imageBuildInfo.ImageDetails,
 			ImageMetadata: extendedBuildInfo.MetadataConfig,
 			ImageName:     imageBase,
+			RegistryCache: options.RegistryCache,
 		}, nil
 	}
 
@@ -232,6 +234,14 @@ func (r *runner) getImageBuildInfoFromDockerfile(substitutionContext *config.Sub
 		return nil, errors.Wrap(err, "parse dockerfile")
 	}
 
+	// Check that the build target specified in the devcontainer.json exists in the Dockerfile
+	if target != "" && parsedDockerfile.StagesByTarget != nil {
+		_, ok := parsedDockerfile.StagesByTarget[target]
+		if !ok {
+			return nil, fmt.Errorf("build target does not exist")
+		}
+	}
+
 	baseImage := parsedDockerfile.FindBaseImage(buildArgs, target)
 	if baseImage == "" {
 		return nil, fmt.Errorf("find base image %s", target)
@@ -279,7 +289,7 @@ func (r *runner) buildImage(
 		return nil, err
 	}
 
-	prebuildHash, err := config.CalculatePrebuildHash(parsedConfig.Config, options.Platform, targetArch, config.GetContextPath(parsedConfig.Config), dockerfilePath, dockerfileContent, r.Log)
+	prebuildHash, err := config.CalculatePrebuildHash(parsedConfig.Config, options.Platform, targetArch, config.GetContextPath(parsedConfig.Config), dockerfilePath, dockerfileContent, buildInfo, r.Log)
 	if err != nil {
 		return nil, err
 	}
@@ -311,6 +321,7 @@ func (r *runner) buildImage(
 					ImageMetadata: extendedBuildInfo.MetadataConfig,
 					ImageName:     prebuildImage,
 					PrebuildHash:  prebuildHash,
+					RegistryCache: options.RegistryCache,
 				}, nil
 			} else if err != nil {
 				r.Log.Debugf("Error trying to find prebuild image %s: %v", prebuildImage, err)
@@ -325,7 +336,7 @@ func (r *runner) buildImage(
 			return nil, fmt.Errorf("cannot build devcontainer because driver is non-docker and dockerless fallback is disabled")
 		}
 
-		return dockerlessFallback(r.LocalWorkspaceFolder, substitutionContext.ContainerWorkspaceFolder, parsedConfig, buildInfo, extendedBuildInfo, dockerfileContent)
+		return dockerlessFallback(r.LocalWorkspaceFolder, substitutionContext.ContainerWorkspaceFolder, parsedConfig, buildInfo, extendedBuildInfo, dockerfileContent, options)
 	}
 
 	return dockerDriver.BuildDevContainer(ctx, prebuildHash, parsedConfig, extendedBuildInfo, dockerfilePath, dockerfileContent, r.LocalWorkspaceFolder, options)
@@ -338,6 +349,7 @@ func dockerlessFallback(
 	buildInfo *config.ImageBuildInfo,
 	extendedBuildInfo *feature.ExtendedBuildInfo,
 	dockerfileContent string,
+	options provider.BuildOptions,
 ) (*config.BuildInfo, error) {
 	contextPath := config.GetContextPath(parsedConfig.Config)
 	devPodInternalFolder := filepath.Join(contextPath, config.DevPodContextFeatureFolder)
@@ -372,6 +384,7 @@ func dockerlessFallback(
 
 			User: buildInfo.User,
 		},
+		RegistryCache: options.RegistryCache,
 	}, nil
 }
 

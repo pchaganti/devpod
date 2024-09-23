@@ -19,6 +19,7 @@ import (
 	client2 "github.com/loft-sh/devpod/pkg/client"
 	"github.com/loft-sh/devpod/pkg/client/clientimplementation"
 	"github.com/loft-sh/devpod/pkg/config"
+	"github.com/loft-sh/devpod/pkg/gitsshsigning"
 	"github.com/loft-sh/devpod/pkg/gpg"
 	"github.com/loft-sh/devpod/pkg/port"
 	devssh "github.com/loft-sh/devpod/pkg/ssh"
@@ -39,10 +40,11 @@ type SSHCmd struct {
 	ForwardPorts        []string
 	ReverseForwardPorts []string
 
-	Stdio              bool
-	JumpContainer      bool
-	AgentForwarding    bool
-	GPGAgentForwarding bool
+	Stdio                     bool
+	JumpContainer             bool
+	AgentForwarding           bool
+	GPGAgentForwarding        bool
+	GitSSHSignatureForwarding bool
 
 	StartServices bool
 
@@ -97,7 +99,11 @@ func NewSSHCmd(flags *flags.GlobalFlags) *cobra.Command {
 }
 
 // Run runs the command logic
-func (cmd *SSHCmd) Run(ctx context.Context, devPodConfig *config.Config, client client2.BaseWorkspaceClient, log log.Logger) error {
+func (cmd *SSHCmd) Run(
+	ctx context.Context,
+	devPodConfig *config.Config,
+	client client2.BaseWorkspaceClient,
+	log log.Logger) error {
 	// add ssh keys to agent
 	if !cmd.Proxy && devPodConfig.ContextOption(config.ContextOptionSSHAgentForwarding) == "true" && devPodConfig.ContextOption(config.ContextOptionSSHAddPrivateKeys) == "true" {
 		log.Debug("Adding ssh keys to agent, disable via 'devpod context set-options -o SSH_ADD_PRIVATE_KEYS=false'")
@@ -232,7 +238,7 @@ func (cmd *SSHCmd) jumpContainer(
 
 			// start ssh tunnel
 			return cmd.startTunnel(ctx, devPodConfig, containerClient, client.Workspace(), log)
-		})
+		}, devPodConfig)
 }
 
 func (cmd *SSHCmd) forwardTimeout(log log.Logger) (time.Duration, error) {
@@ -424,8 +430,6 @@ func (cmd *SSHCmd) startServices(
 			containerClient,
 			cmd.User,
 			false,
-			true,
-			true,
 			nil,
 			gitUsername,
 			gitToken,
@@ -474,6 +478,19 @@ func (cmd *SSHCmd) startProxyServices(
 		if gitCredentials {
 			command += " --configure-git-helper"
 		}
+
+		// check if we should enable git ssh commit signature support
+		if cmd.GitSSHSignatureForwarding || devPodConfig.ContextOption(config.ContextOptionGitSSHSignatureForwarding) == "true" {
+			format, userSigningKey, err := gitsshsigning.ExtractGitConfiguration()
+			if err != nil {
+				return
+			}
+
+			if userSigningKey != "" && format == gitsshsigning.GPGFormatSSH {
+				command += fmt.Sprintf(" --git-user-signing-key %s", userSigningKey)
+			}
+		}
+
 		if log.GetLevel() == logrus.DebugLevel {
 			command += " --debug"
 		}

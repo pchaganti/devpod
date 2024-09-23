@@ -45,7 +45,7 @@ func (r *runner) stopDockerCompose(ctx context.Context, projectName string) erro
 		return errors.Wrap(err, "find docker compose")
 	}
 
-	parsedConfig, _, err := r.prepare(r.WorkspaceConfig.CLIOptions)
+	parsedConfig, _, err := r.getSubstitutedConfig(r.WorkspaceConfig.CLIOptions)
 	if err != nil {
 		return errors.Wrap(err, "get parsed config")
 	}
@@ -69,7 +69,7 @@ func (r *runner) deleteDockerCompose(ctx context.Context, projectName string) er
 		return errors.Wrap(err, "find docker compose")
 	}
 
-	parsedConfig, _, err := r.prepare(r.WorkspaceConfig.CLIOptions)
+	parsedConfig, _, err := r.getSubstitutedConfig(r.WorkspaceConfig.CLIOptions)
 	if err != nil {
 		return errors.Wrap(err, "get parsed config")
 	}
@@ -115,6 +115,7 @@ func (r *runner) runDockerCompose(
 	parsedConfig *config.SubstitutedConfig,
 	substitutionContext *config.SubstitutionContext,
 	options UpOptions,
+	timeout time.Duration,
 ) (*config.Result, error) {
 	composeHelper, err := r.composeHelper()
 	if err != nil {
@@ -202,7 +203,7 @@ func (r *runner) runDockerCompose(
 	}
 
 	// setup container
-	return r.setupContainer(ctx, parsedConfig.Raw, containerDetails, mergedConfig, substitutionContext)
+	return r.setupContainer(ctx, parsedConfig.Raw, containerDetails, mergedConfig, substitutionContext, timeout)
 }
 
 func (r *runner) getDockerComposeFilePaths(parsedConfig *config.SubstitutedConfig, envFiles []string) ([]string, error) {

@@ -26,11 +26,19 @@ pub struct Settings {
     experimental_jupyter_notebooks: bool,
     #[serde(rename = "experimental_vscodeInsiders")]
     experimental_vscode_insiders: bool,
+    #[serde(rename = "experimental_cursor")]
+    experimental_cursor: bool,
     #[serde(rename = "experimental_devPodPro")]
     experimental_devpod_pro: bool,
+    #[serde(rename = "experimental_colorMode")]
+    experimental_color_mode: ColorMode,
     additional_cli_flags: String,
     additional_env_vars: String,
     dotfiles_url: String,
+    ssh_key_path: String,
+    http_proxy_url: String,
+    https_proxy_url: String,
+    no_proxy: String,
 }
 
 #[derive(Debug, Serialize, TS)]
@@ -39,6 +47,14 @@ pub struct Settings {
 enum SidebarPosition {
     Left,
     Right,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(rename_all = "camelCase")]
+#[ts(export)]
+enum ColorMode {
+    Dark,
+    Light
 }
 
 #[derive(Debug, Serialize, TS)]

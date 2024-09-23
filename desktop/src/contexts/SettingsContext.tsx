@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react"
 import { client } from "../client"
@@ -34,10 +35,16 @@ const initialSettings: TSettings = {
   experimental_fleet: true,
   experimental_jupyterNotebooks: true,
   experimental_vscodeInsiders: true,
+  experimental_cursor: true,
   experimental_devPodPro: false,
+  experimental_colorMode: "light",
   additionalCliFlags: "",
   additionalEnvVars: "",
-  dotfilesURL: "",
+  dotfilesUrl: "",
+  sshKeyPath: "",
+  httpProxyUrl: "",
+  httpsProxyUrl: "",
+  noProxy: "",
 }
 function getSettingKeys(): readonly TSetting[] {
   return getKeys(initialSettings)
@@ -95,12 +102,18 @@ export function SettingsProvider({ children }: Readonly<{ children?: ReactNode }
   }, [settings.additionalCliFlags])
 
   useEffect(() => {
-    client.setSetting("dotfilesURL", settings.dotfilesURL)
-  }, [settings.dotfilesURL])
+    client.setSetting("dotfilesUrl", settings.dotfilesUrl)
+  }, [settings.dotfilesUrl])
 
   useEffect(() => {
     client.setSetting("additionalEnvVars", settings.additionalEnvVars)
   }, [settings.additionalEnvVars])
+
+  useEffect(() => {
+    client.setSetting("httpProxyUrl", settings.httpProxyUrl)
+    client.setSetting("httpsProxyUrl", settings.httpsProxyUrl)
+    client.setSetting("noProxy", settings.noProxy)
+  }, [settings.httpProxyUrl, settings.httpsProxyUrl, settings.noProxy])
 
   const set = useCallback<TSettingsContext["set"]>((key, value) => {
     settingsStore.set(key, value)

@@ -20,6 +20,7 @@ import {
   Tabs,
   Text,
   VStack,
+  useColorMode,
   useColorModeValue,
 } from "@chakra-ui/react"
 import { ReactNode, useEffect, useMemo, useState } from "react"
@@ -38,13 +39,19 @@ import {
 } from "../../lib"
 import { useWelcomeModal } from "../../useWelcomeModal"
 import {
-  useDotfilesOption,
-  useCLIFlagsOption,
   useAgentURLOption,
+  useDockerCredentialsForwardingOption,
+  useGitCredentialsForwardingOption,
   useTelemetryOption,
-  useExtraEnvVarsOption,
 } from "./useContextOptions"
 import { useIDESettings } from "./useIDESettings"
+import {
+  useCLIFlagsOption,
+  useDotfilesOption,
+  useExtraEnvVarsOption,
+  useProxyOptions,
+  useSSHKeySignatureOption,
+} from "./useSettingsOptions"
 
 const SETTINGS_TABS = [
   { label: "General", component: <GeneralSettings /> },
@@ -83,6 +90,7 @@ function GeneralSettings() {
   const { settings, set } = useChangeSettings()
   const { modal: welcomeModal, show: showWelcomeModal } = useWelcomeModal()
   const { input: agentURLInput, helpText: agentURLHelpText } = useAgentURLOption()
+  const { input: proxyInput, helpText: proxyHelpText } = useProxyOptions()
   const { input: telemetryInput, helpText: telemetryHelpText } = useTelemetryOption()
   const {
     badge: installCLIBadge,
@@ -115,12 +123,16 @@ function GeneralSettings() {
         />
       </SettingSection>
 
-      <SettingSection title="Telemetry" description={telemetryHelpText}>
-        {telemetryInput}
-      </SettingSection>
-
       <SettingSection title="Agent URL" description={agentURLHelpText}>
         {agentURLInput}
+      </SettingSection>
+
+      <SettingSection title="Proxy Configuration" description={proxyHelpText}>
+        {proxyInput}
+      </SettingSection>
+
+      <SettingSection title="Telemetry" description={telemetryHelpText}>
+        {telemetryInput}
       </SettingSection>
 
       <SettingSection
@@ -148,13 +160,17 @@ function GeneralSettings() {
 
 function CustomizationSettings() {
   const { input: dotfilesInput } = useDotfilesOption()
+  const { input: gitSSHSignatureInput } = useSSHKeySignatureOption()
   const { settings, set } = useChangeSettings()
   const { ides, defaultIDE, updateDefaultIDE } = useIDESettings()
+  const { input: dockerCredentialForwardingInput, helpText: dockerCredentialForwardingHelpText } =
+    useDockerCredentialsForwardingOption()
+  const { input: gitCredentialForwardingInput, helpText: gitCredentialForwardingHelpText } =
+    useGitCredentialsForwardingOption()
 
   return (
     <>
       <SettingSection
-        showDivider={true}
         title="IDE"
         description="Select the default IDE you're using for workspaces. This will be overridden whenever you create a workspace with a different IDE. You can prevent this by checking the 'Always use this IDE' checkbox">
         <>
@@ -176,11 +192,30 @@ function CustomizationSettings() {
           </Checkbox>
         </>
       </SettingSection>
+
       <SettingSection
-        showDivider={true}
         title="Dotfiles"
         description="Set the dotfiles git repository to use inside workspaces">
         {dotfilesInput}
+      </SettingSection>
+
+      <SettingSection
+        title="SSH Key for Git commit signing"
+        description="Set path of your SSH key you want to use for signing Git commits">
+        {gitSSHSignatureInput}
+      </SettingSection>
+
+      <SettingSection
+        title="Docker credentials forwarding"
+        description={dockerCredentialForwardingHelpText}>
+        {dockerCredentialForwardingInput}
+      </SettingSection>
+
+      <SettingSection
+        showDivider={false}
+        title="Git credentials forwarding"
+        description={gitCredentialForwardingHelpText}>
+        {gitCredentialForwardingInput}
       </SettingSection>
     </>
   )
@@ -334,6 +369,7 @@ function ExperimentalSettings() {
   const { input: cliFlagsInput, helpText: cliFlagsHelpText } = useCLIFlagsOption()
   const { input: extraEnvVarsInput, helpText: extraEnvVarsHelpText } = useExtraEnvVarsOption()
   const { settings, set } = useChangeSettings()
+  const { setColorMode } = useColorMode()
 
   return (
     <VStack align="start">
@@ -377,6 +413,15 @@ function ExperimentalSettings() {
             VSCode Insiders
           </FormLabel>
         </HStack>
+        <HStack width="full" align="center">
+          <Switch
+            isChecked={settings.experimental_cursor}
+            onChange={(e) => set("experimental_cursor", e.target.checked)}
+          />
+          <FormLabel marginBottom="0" whiteSpace="nowrap" fontSize="sm">
+            Cursor
+          </FormLabel>
+        </HStack>
       </SettingSection>
 
       <SettingSection title="Additional CLI Flags" description={cliFlagsHelpText}>
@@ -387,14 +432,25 @@ function ExperimentalSettings() {
         {extraEnvVarsInput}
       </SettingSection>
 
-      <SettingSection
-        showDivider={false}
-        title="DevPod Pro (beta)"
-        description="Enable DevPod Pro login and creation">
+      <SettingSection title="DevPod Pro (beta)" description="Enable DevPod Pro login and creation">
         <Switch
           isChecked={settings.experimental_devPodPro}
           onChange={(e) => set("experimental_devPodPro", e.target.checked)}
         />
+      </SettingSection>
+
+      <SettingSection title="Color Mode" description="" showDivider={false}>
+        <RadioGroup
+          value={settings.experimental_colorMode}
+          onChange={(newValue: TSettings["experimental_colorMode"]) => {
+            set("experimental_colorMode", newValue)
+            setColorMode(newValue)
+          }}>
+          <HStack>
+            <Radio value="light">Light</Radio>
+            <Radio value="dark">Dark</Radio>
+          </HStack>
+        </RadioGroup>
       </SettingSection>
     </VStack>
   )

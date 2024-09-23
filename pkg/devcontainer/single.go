@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/loft-sh/devpod/pkg/devcontainer/config"
 	"github.com/loft-sh/devpod/pkg/devcontainer/metadata"
@@ -13,7 +14,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-var dockerlessImage = "ghcr.io/loft-sh/dockerless:0.1.4"
+var dockerlessImage = "ghcr.io/loft-sh/dockerless:0.2.0"
 
 const (
 	DevPodExtraEnvVar           = "DEVPOD"
@@ -22,7 +23,13 @@ const (
 	WorkspaceUIDExtraEnvVar     = "DEVPOD_WORKSPACE_UID"
 )
 
-func (r *runner) runSingleContainer(ctx context.Context, parsedConfig *config.SubstitutedConfig, substitutionContext *config.SubstitutionContext, options UpOptions) (*config.Result, error) {
+func (r *runner) runSingleContainer(
+	ctx context.Context,
+	parsedConfig *config.SubstitutedConfig,
+	substitutionContext *config.SubstitutionContext,
+	options UpOptions,
+	timeout time.Duration,
+) (*config.Result, error) {
 	containerDetails, err := r.Driver.FindDevContainer(ctx, r.ID)
 	if err != nil {
 		return nil, fmt.Errorf("find dev container: %w", err)
@@ -79,7 +86,9 @@ func (r *runner) runSingleContainer(ctx context.Context, parsedConfig *config.Su
 				PrebuildRepositories: options.PrebuildRepositories,
 				ForceDockerless:      options.ForceDockerless,
 			},
-			NoBuild: options.NoBuild,
+			NoBuild:       options.NoBuild,
+			RegistryCache: options.RegistryCache,
+			ExportCache:   false,
 		})
 		if err != nil {
 			return nil, errors.Wrap(err, "build image")
@@ -115,7 +124,7 @@ func (r *runner) runSingleContainer(ctx context.Context, parsedConfig *config.Su
 	}
 
 	// setup container
-	return r.setupContainer(ctx, parsedConfig.Raw, containerDetails, mergedConfig, substitutionContext)
+	return r.setupContainer(ctx, parsedConfig.Raw, containerDetails, mergedConfig, substitutionContext, timeout)
 }
 
 func (r *runner) runContainer(
@@ -179,6 +188,7 @@ func (r *runner) getDockerlessRunOptions(
 		"DOCKERLESS":            "true",
 		"DOCKERLESS_CONTEXT":    buildInfo.Dockerless.Context,
 		"DOCKERLESS_DOCKERFILE": buildInfo.Dockerless.Dockerfile,
+		"GODEBUG":               "http2client=0", // https://github.com/GoogleContainerTools/kaniko/issues/875
 	}
 	for k, v := range mergedConfig.ContainerEnv {
 		env[k] = v

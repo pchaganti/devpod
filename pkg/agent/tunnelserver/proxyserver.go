@@ -93,6 +93,14 @@ func (t *proxyServer) GitCredentials(ctx context.Context, message *tunnel.Messag
 	return t.client.GitCredentials(ctx, message)
 }
 
+func (t *proxyServer) GitSSHSignature(ctx context.Context, message *tunnel.Message) (*tunnel.Message, error) {
+	return t.client.GitSSHSignature(ctx, message)
+}
+
+func (t *proxyServer) LoftConfig(ctx context.Context, message *tunnel.Message) (*tunnel.Message, error) {
+	return t.client.LoftConfig(ctx, message)
+}
+
 func (t *proxyServer) SendResult(ctx context.Context, result *tunnel.Message) (*tunnel.Empty, error) {
 	parsedResult := &config.Result{}
 	err := json.Unmarshal([]byte(result.Message), parsedResult)
