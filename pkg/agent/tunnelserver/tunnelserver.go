@@ -3,10 +3,12 @@ package tunnelserver
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/loft-sh/devpod/pkg/agent/tunnel"
@@ -16,11 +18,13 @@ import (
 	"github.com/loft-sh/devpod/pkg/git"
 	"github.com/loft-sh/devpod/pkg/gitcredentials"
 	"github.com/loft-sh/devpod/pkg/gitsshsigning"
+	"github.com/loft-sh/devpod/pkg/gpg"
 	"github.com/loft-sh/devpod/pkg/loftconfig"
 	"github.com/loft-sh/devpod/pkg/netstat"
 	provider2 "github.com/loft-sh/devpod/pkg/provider"
 	"github.com/loft-sh/devpod/pkg/stdio"
 	"github.com/loft-sh/log"
+	"github.com/moby/buildkit/frontend/dockerfile/dockerignore"
 	perrors "github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -205,12 +209,18 @@ func (t *tunnelServer) GitCredentials(ctx context.Context, message *tunnel.Messa
 		return nil, perrors.Wrap(err, "decode git credentials request")
 	}
 
-	response, err := gitcredentials.GetCredentials(credentials, t.gitCredentialsOverride.username, t.gitCredentialsOverride.token)
-	if err != nil {
-		return nil, perrors.Wrap(err, "get git response")
+	if t.gitCredentialsOverride.token != "" {
+		credentials.Username = t.gitCredentialsOverride.username
+		credentials.Password = t.gitCredentialsOverride.token
+	} else {
+		response, err := gitcredentials.GetCredentials(credentials)
+		if err != nil {
+			return nil, perrors.Wrap(err, "get git response")
+		}
+		credentials = response
 	}
 
-	out, err := json.Marshal(response)
+	out, err := json.Marshal(credentials)
 	if err != nil {
 		return nil, err
 	}
@@ -256,6 +266,17 @@ func (t *tunnelServer) LoftConfig(ctx context.Context, message *tunnel.Message) 
 	}
 
 	return &tunnel.Message{Message: string(out)}, nil
+}
+
+func (t *tunnelServer) GPGPublicKeys(ctx context.Context, message *tunnel.Message) (*tunnel.Message, error) {
+	rawPubKeys, err := gpg.GetHostPubKey()
+	if err != nil {
+		return nil, fmt.Errorf("get gpg host public keys: %w", err)
+	}
+
+	pubKeyArgument := base64.StdEncoding.EncodeToString(rawPubKeys)
+
+	return &tunnel.Message{Message: pubKeyArgument}, nil
 }
 
 func (t *tunnelServer) SendResult(ctx context.Context, result *tunnel.Message) (*tunnel.Empty, error) {
@@ -364,8 +385,18 @@ func (t *tunnelServer) StreamWorkspace(message *tunnel.Empty, stream tunnel.Tunn
 		return fmt.Errorf("workspace is nil")
 	}
 
+	// Get .devpodignore files to exclude
+	excludes := []string{}
+	f, err := os.Open(filepath.Join(t.workspace.Source.LocalFolder, ".devpodignore"))
+	if err == nil {
+		excludes, err = dockerignore.ReadAll(f)
+		if err != nil {
+			t.log.Warnf("Error reading .devpodignore file: %v", err)
+		}
+	}
+
 	buf := bufio.NewWriterSize(NewStreamWriter(stream, t.log), 10*1024)
-	err := extract.WriteTar(buf, t.workspace.Source.LocalFolder, false)
+	err = extract.WriteTarExclude(buf, t.workspace.Source.LocalFolder, false, excludes)
 	if err != nil {
 		return err
 	}
@@ -386,8 +417,20 @@ func (t *tunnelServer) StreamMount(message *tunnel.StreamMountRequest, stream tu
 		return fmt.Errorf("mount %s is not allowed to download", message.Mount)
 	}
 
+	// Get .devpodignore files to exclude
+	excludes := []string{}
+	if t.workspace != nil {
+		f, err := os.Open(filepath.Join(t.workspace.Source.LocalFolder, ".devpodignore"))
+		if err == nil {
+			excludes, err = dockerignore.ReadAll(f)
+			if err != nil {
+				t.log.Warnf("Error reading .devpodignore file: %v", err)
+			}
+		}
+	}
+
 	buf := bufio.NewWriterSize(NewStreamWriter(stream, t.log), 10*1024)
-	err := extract.WriteTar(buf, mount.Source, false)
+	err := extract.WriteTarExclude(buf, mount.Source, false, excludes)
 	if err != nil {
 		return err
 	}

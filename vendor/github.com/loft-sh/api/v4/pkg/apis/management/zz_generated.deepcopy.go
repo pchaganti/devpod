@@ -582,6 +582,11 @@ func (in *Authentication) DeepCopyInto(out *Authentication) {
 			(*out)[key] = val
 		}
 	}
+	if in.GroupsFilters != nil {
+		in, out := &in.GroupsFilters, &out.GroupsFilters
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 
@@ -4779,6 +4784,13 @@ func (in *ProjectTemplates) DeepCopyInto(out *ProjectTemplates) {
 	if in.DevPodWorkspaceTemplates != nil {
 		in, out := &in.DevPodWorkspaceTemplates, &out.DevPodWorkspaceTemplates
 		*out = make([]DevPodWorkspaceTemplate, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+	if in.DevPodEnvironmentTemplates != nil {
+		in, out := &in.DevPodEnvironmentTemplates, &out.DevPodEnvironmentTemplates
+		*out = make([]DevPodEnvironmentTemplate, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}

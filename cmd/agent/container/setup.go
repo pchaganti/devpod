@@ -30,6 +30,7 @@ import (
 	"github.com/loft-sh/devpod/pkg/ide/fleet"
 	"github.com/loft-sh/devpod/pkg/ide/jetbrains"
 	"github.com/loft-sh/devpod/pkg/ide/jupyter"
+	"github.com/loft-sh/devpod/pkg/ide/marimo"
 	"github.com/loft-sh/devpod/pkg/ide/openvscode"
 	"github.com/loft-sh/devpod/pkg/ide/vscode"
 	provider2 "github.com/loft-sh/devpod/pkg/provider"
@@ -136,7 +137,7 @@ func (cmd *SetupContainerCmd) Run(ctx context.Context) error {
 	}
 
 	// do dockerless build
-	err = dockerlessBuild(ctx, setupInfo, &workspaceInfo.Dockerless, tunnelClient, logger)
+	err = dockerlessBuild(ctx, setupInfo, &workspaceInfo.Dockerless, tunnelClient, cmd.Debug, logger)
 	if err != nil {
 		return fmt.Errorf("dockerless build: %w", err)
 	}
@@ -163,7 +164,7 @@ func (cmd *SetupContainerCmd) Run(ctx context.Context) error {
 		if err := agent.CloneRepositoryForWorkspace(ctx,
 			&workspaceInfo.Source,
 			&workspaceInfo.Agent,
-			workspaceInfo.ContentFolder,
+			setupInfo.SubstitutionContext.ContainerWorkspaceFolder,
 			"",
 			workspaceInfo.CLIOptions,
 			true,
@@ -239,6 +240,7 @@ func dockerlessBuild(
 	setupInfo *config.Result,
 	dockerlessOptions *provider2.ProviderDockerlessOptions,
 	client tunnel.TunnelClient,
+	debug bool,
 	log log.Logger,
 ) error {
 	if os.Getenv("DOCKERLESS") != "true" {
@@ -318,14 +320,19 @@ func dockerlessBuild(
 	}
 
 	// write output to log
-	writer := log.Writer(logrus.InfoLevel, false)
-	defer writer.Close()
+	errWriter := log.Writer(logrus.InfoLevel, false)
+	defer errWriter.Close()
 
 	// start building
 	log.Infof("Start dockerless building %s %s", "/.dockerless/dockerless", strings.Join(args, " "))
 	cmd := exec.CommandContext(ctx, "/.dockerless/dockerless", args...)
-	cmd.Stdout = writer
-	cmd.Stderr = writer
+
+	if debug {
+		debugWriter := log.Writer(logrus.DebugLevel, false)
+		defer debugWriter.Close()
+		cmd.Stdout = debugWriter
+	}
+	cmd.Stderr = errWriter
 	cmd.Env = os.Environ()
 	err = cmd.Run()
 	if err != nil {
@@ -400,6 +407,10 @@ func (cmd *SetupContainerCmd) installIDE(setupInfo *config.Result, ide *provider
 		return cmd.setupVSCode(setupInfo, ide.Options, vscode.FlavorStable, log)
 	case string(config2.IDEVSCodeInsiders):
 		return cmd.setupVSCode(setupInfo, ide.Options, vscode.FlavorInsiders, log)
+	case string(config2.IDECursor):
+		return cmd.setupVSCode(setupInfo, ide.Options, vscode.FlavorCursor, log)
+	case string(config2.IDEPositron):
+		return cmd.setupVSCode(setupInfo, ide.Options, vscode.FlavorPositron, log)
 	case string(config2.IDEOpenVSCode):
 		return cmd.setupOpenVSCode(setupInfo, ide.Options, log)
 	case string(config2.IDEGoland):
@@ -424,13 +435,17 @@ func (cmd *SetupContainerCmd) installIDE(setupInfo *config.Result, ide *provider
 		return fleet.NewFleetServer(config.GetRemoteUser(setupInfo), ide.Options, log).Install(setupInfo.SubstitutionContext.ContainerWorkspaceFolder)
 	case string(config2.IDEJupyterNotebook):
 		return jupyter.NewJupyterNotebookServer(setupInfo.SubstitutionContext.ContainerWorkspaceFolder, config.GetRemoteUser(setupInfo), ide.Options, log).Install()
+	case string(config2.IDEJupyterDesktop):
+		return jupyter.NewJupyterNotebookServer(setupInfo.SubstitutionContext.ContainerWorkspaceFolder, config.GetRemoteUser(setupInfo), ide.Options, log).Install()
+	case string(config2.IDEMarimo):
+		return marimo.NewServer(setupInfo.SubstitutionContext.ContainerWorkspaceFolder, config.GetRemoteUser(setupInfo), ide.Options, log).Install()
 	}
 
 	return nil
 }
 
 func (cmd *SetupContainerCmd) setupVSCode(setupInfo *config.Result, ideOptions map[string]config2.OptionValue, flavor vscode.Flavor, log log.Logger) error {
-	log.Debugf("Setup vscode...")
+	log.Debugf("Setup %s...", flavor)
 	vsCodeConfiguration := config.GetVSCodeConfiguration(setupInfo.MergedConfig)
 	settings := ""
 	if len(vsCodeConfiguration.Settings) > 0 {
@@ -457,7 +472,7 @@ func (cmd *SetupContainerCmd) setupVSCode(setupInfo *config.Result, ideOptions m
 		return nil
 	}
 
-	return single.Single("vscode-async.pid", func() (*exec.Cmd, error) {
+	return single.Single(fmt.Sprintf("%s-async.pid", flavor), func() (*exec.Cmd, error) {
 		log.Infof("Install extensions '%s' in the background", strings.Join(vsCodeConfiguration.Extensions, ","))
 		binaryPath, err := os.Executable()
 		if err != nil {

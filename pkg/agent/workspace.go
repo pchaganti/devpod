@@ -17,6 +17,7 @@ import (
 	provider2 "github.com/loft-sh/devpod/pkg/provider"
 	"github.com/loft-sh/log"
 	"github.com/mitchellh/go-homedir"
+	"github.com/moby/buildkit/frontend/dockerfile/dockerignore"
 )
 
 var extraSearchLocations = []string{"/home/devpod/.devpod/agent", "/opt/devpod/agent", "/var/lib/devpod/agent", "/var/devpod/agent"}
@@ -285,10 +286,11 @@ func CloneRepositoryForWorkspace(
 	// setup private ssh key if passed in
 	extraEnv := []string{}
 	if options.SSHKey != "" {
-		sshExtraEnv, err := setupSSHKey(options.SSHKey, agentConfig.Path)
+		sshExtraEnv, cleanUpSSHKey, err := setupSSHKey(options.SSHKey, agentConfig.Path)
 		if err != nil {
 			return err
 		}
+		defer cleanUpSSHKey()
 		extraEnv = append(extraEnv, sshExtraEnv...)
 	}
 
@@ -302,30 +304,49 @@ func CloneRepositoryForWorkspace(
 
 	log.Done("Successfully cloned repository")
 
+	// Get .devpodignore files to exclude
+	f, err := os.Open(filepath.Join(workspaceDir, ".devpodignore"))
+	if err != nil {
+		return nil
+	}
+	excludes, err := dockerignore.ReadAll(f)
+	if err != nil {
+		log.Warn(".devpodignore file is invalid : ", err)
+		return nil
+	}
+	// Remove files from workspace content folder
+	for _, exclude := range excludes {
+		os.RemoveAll(filepath.Join(workspaceDir, exclude))
+	}
+	log.Debug("Ignore files from .devpodignore ", excludes)
+
 	return nil
 }
 
-func setupSSHKey(key string, agentPath string) ([]string, error) {
+func setupSSHKey(key string, agentPath string) ([]string, func(), error) {
 	keyFile, err := os.CreateTemp("", "")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	defer os.Remove(keyFile.Name())
-	defer keyFile.Close()
 
 	if err := writeSSHKey(keyFile, key); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if err := os.Chmod(keyFile.Name(), 0o400); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	env := []string{"GIT_TERMINAL_PROMPT=0"}
 	gitSSHCmd := []string{agentPath, "helper", "ssh-git-clone", "--key-file=" + keyFile.Name()}
 	env = append(env, "GIT_SSH_COMMAND="+command.Quote(gitSSHCmd))
 
-	return env, nil
+	cleanup := func() {
+		os.Remove(keyFile.Name())
+		keyFile.Close()
+	}
+
+	return env, cleanup, nil
 }
 
 func writeSSHKey(key *os.File, sshKey string) error {

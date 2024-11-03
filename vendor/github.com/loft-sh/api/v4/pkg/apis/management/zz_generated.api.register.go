@@ -628,13 +628,13 @@ var (
 		func() runtime.Object { return &ConvertVirtualClusterConfigList{} },
 	)
 	InternalDevPodEnvironmentTemplate = builders.NewInternalResource(
-		"devpodenvironmenttemplate",
+		"devpodenvironmenttemplates",
 		"DevPodEnvironmentTemplate",
 		func() runtime.Object { return &DevPodEnvironmentTemplate{} },
 		func() runtime.Object { return &DevPodEnvironmentTemplateList{} },
 	)
 	InternalDevPodEnvironmentTemplateStatus = builders.NewInternalResourceStatus(
-		"devpodenvironmenttemplate",
+		"devpodenvironmenttemplates",
 		"DevPodEnvironmentTemplateStatus",
 		func() runtime.Object { return &DevPodEnvironmentTemplate{} },
 		func() runtime.Object { return &DevPodEnvironmentTemplateList{} },
@@ -1499,6 +1499,7 @@ type Authentication struct {
 	AccessKeyMaxTTLSeconds   int64                   `json:"accessKeyMaxTTLSeconds,omitempty"`
 	LoginAccessKeyTTLSeconds *int64                  `json:"loginAccessKeyTTLSeconds,omitempty"`
 	CustomHttpHeaders        map[string]string       `json:"customHttpHeaders,omitempty"`
+	GroupsFilters            []string                `json:"groupsFilters,omitempty"`
 }
 
 type AuthenticationGithub struct {
@@ -1623,7 +1624,7 @@ type BackupStatus struct {
 }
 
 // +genclient
-// +genclient:nonNamespaced
+// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type Cluster struct {
@@ -1852,7 +1853,7 @@ type DevPodDeleteOptions struct {
 }
 
 // +genclient
-// +genclient:nonNamespaced
+// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type DevPodEnvironmentTemplate struct {
@@ -2055,7 +2056,7 @@ type KioskStatus struct {
 }
 
 // +genclient
-// +genclient:nonNamespaced
+// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type License struct {
@@ -2328,14 +2329,16 @@ type ProjectStatus struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type ProjectTemplates struct {
-	metav1.TypeMeta                `json:",inline"`
-	metav1.ObjectMeta              `json:"metadata,omitempty"`
-	DefaultVirtualClusterTemplate  string                    `json:"defaultVirtualClusterTemplate,omitempty"`
-	VirtualClusterTemplates        []VirtualClusterTemplate  `json:"virtualClusterTemplates,omitempty"`
-	DefaultSpaceTemplate           string                    `json:"defaultSpaceTemplate,omitempty"`
-	SpaceTemplates                 []SpaceTemplate           `json:"spaceTemplates,omitempty"`
-	DefaultDevPodWorkspaceTemplate string                    `json:"defaultDevPodWorkspaceTemplate,omitempty"`
-	DevPodWorkspaceTemplates       []DevPodWorkspaceTemplate `json:"devPodWorkspaceTemplates,omitempty"`
+	metav1.TypeMeta                  `json:",inline"`
+	metav1.ObjectMeta                `json:"metadata,omitempty"`
+	DefaultVirtualClusterTemplate    string                      `json:"defaultVirtualClusterTemplate,omitempty"`
+	VirtualClusterTemplates          []VirtualClusterTemplate    `json:"virtualClusterTemplates,omitempty"`
+	DefaultSpaceTemplate             string                      `json:"defaultSpaceTemplate,omitempty"`
+	SpaceTemplates                   []SpaceTemplate             `json:"spaceTemplates,omitempty"`
+	DefaultDevPodWorkspaceTemplate   string                      `json:"defaultDevPodWorkspaceTemplate,omitempty"`
+	DevPodWorkspaceTemplates         []DevPodWorkspaceTemplate   `json:"devPodWorkspaceTemplates,omitempty"`
+	DevPodEnvironmentTemplates       []DevPodEnvironmentTemplate `json:"devPodEnvironmentTemplates,omitempty"`
+	DefaultDevPodEnvironmentTemplate string                      `json:"defaultDevPodEnvironmentTemplate,omitempty"`
 }
 
 // +genclient

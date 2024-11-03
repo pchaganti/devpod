@@ -52,6 +52,7 @@ import {
   useProxyOptions,
   useSSHKeySignatureOption,
 } from "./useSettingsOptions"
+import { compareVersions } from "compare-versions"
 
 const SETTINGS_TABS = [
   { label: "General", component: <GeneralSettings /> },
@@ -266,12 +267,14 @@ function AppearanceSettings() {
 }
 function UpdateSettings() {
   const { settings, set } = useChangeSettings()
-  const releases = useReleases()
   const platform = usePlatform()
   const arch = useArch()
   const version = useVersion()
   const [selectedVersion, setSelectedVersion] = useState<string | undefined>(undefined)
   const { isChecking, check, isUpdateAvailable, pendingUpdate } = useUpdate()
+  const releases = useReleases()
+    ?.slice()
+    .sort((a, b) => compareVersions(a.tag_name, b.tag_name))
   const downloadLink = useMemo(() => {
     const release = releases?.find((release) => release.tag_name === selectedVersion)
     if (!release) {
@@ -420,6 +423,15 @@ function ExperimentalSettings() {
           />
           <FormLabel marginBottom="0" whiteSpace="nowrap" fontSize="sm">
             Cursor
+          </FormLabel>
+        </HStack>
+        <HStack width="full" align="center">
+          <Switch
+            isChecked={settings.experimental_positron}
+            onChange={(e) => set("experimental_positron", e.target.checked)}
+          />
+          <FormLabel marginBottom="0" whiteSpace="nowrap" fontSize="sm">
+            Positron
           </FormLabel>
         </HStack>
       </SettingSection>

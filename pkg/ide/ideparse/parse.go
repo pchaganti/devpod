@@ -123,6 +123,14 @@ var AllowedIDEs = []AllowedIDE{
 		Experimental: true,
 	},
 	{
+		Name:         config.IDEJupyterDesktop,
+		DisplayName:  "Jupyter Desktop",
+		Options:      jupyter.Options,
+		Icon:         "https://devpod.sh/assets/jupyter.svg",
+		IconDark:     "https://devpod.sh/assets/jupyter_dark.svg",
+		Experimental: true,
+	},
+	{
 		Name:         config.IDEVSCodeInsiders,
 		DisplayName:  "VSCode Insiders",
 		Options:      vscode.Options,
@@ -134,6 +142,20 @@ var AllowedIDEs = []AllowedIDE{
 		DisplayName:  "Cursor",
 		Options:      vscode.Options,
 		Icon:         "https://devpod.sh/assets/cursor.svg",
+		Experimental: true,
+	},
+	{
+		Name:         config.IDEPositron,
+		DisplayName:  "Positron",
+		Options:      vscode.Options,
+		Icon:         "https://devpod.sh/assets/positron.svg",
+		Experimental: true,
+	},
+	{
+		Name:         config.IDEMarimo,
+		DisplayName:  "Marimo",
+		Options:      vscode.Options,
+		Icon:         "https://devpod.sh/assets/marimo.svg",
 		Experimental: true,
 	},
 }
